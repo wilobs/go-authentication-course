@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -28,11 +30,21 @@ func main() {
 	// }
 	// fmt.Println(xp2)
 
-	// http.HandleFunc("/encode", foo)
-	// http.ListenAndServe(":8080", nil)
+	http.HandleFunc("/encode", foo)
+	http.HandleFunc("/decode", bar)
+	http.ListenAndServe(":8080", nil)
 
 }
+
 func foo(w http.ResponseWriter, r *http.Request) {
+	p1 := person{
+		First: "Wilson",
+	}
+
+	err := json.NewEncoder(w).Encode(p1)
+	if err != nil {
+		log.Println("Encoding bad data", err)
+	}
 
 }
 
