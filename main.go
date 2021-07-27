@@ -30,6 +30,8 @@ func (u *UserClaims) Valid() error {
 	if u.SessionId == 0 {
 		return fmt.Errorf("Invalid Session ID")
 	}
+
+	return nil
 }
 
 func main() {
@@ -55,6 +57,15 @@ func hashPassword(password string) ([]byte, error) {
 	}
 	return bs, nil
 
+}
+
+func comparePassword(password string, hashedPass []byte) error {
+	err := bcrypt.CompareHashAndPassword(hashedPass, []byte(password))
+	if err != nil {
+		return fmt.Errorf("Invalid password: %w", err)
+	}
+
+	return nil
 }
 
 func signMessage(msg []byte) ([]byte, error) {
