@@ -1,12 +1,12 @@
 package main
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt"
 )
 
 func main() {
@@ -21,21 +21,24 @@ func foo(w http.ResponseWriter, r *http.Request) {
 		c = &http.Cookie{}
 	}
 
-	isEqual := true
-	xs := strings.SplitN(c.Value, "|", 2)
+	ss := c.Value
+	afterVerificationToken, err := jwt.ParseWithClaims(ss, &myClaims{}, func(beforeVerificationToken *jwt.Token) (interface{}, error) {
+		if beforeVerificationToken.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+			return nil, fmt.Errorf("Someone tried to hack changed signing method")
+		}
 
-	if len(xs) == 2 {
-		cCode := xs[0]
-		cEmail := xs[1]
+		return []byte(myKey), nil
 
-		code := getCode(cEmail)
+	})
 
-		isEqual = hmac.Equal([]byte(cCode), []byte(code))
-	}
+	isEqual := err == nil && afterVerificationToken.Valid
 
 	message := "Not logged in"
 	if isEqual {
 		message = "Logged in"
+		claims := afterVerificationToken.Claims.(*myClaims)
+		fmt.Println(claims.Email)
+		fmt.Println(claims.ExpiresAt)
 	}
 
 	html := `
@@ -47,11 +50,11 @@ func foo(w http.ResponseWriter, r *http.Request) {
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<title>HMAC Example</title>
 	</head>
-	<body>
+	<body> 
 		<p> Cookie value: ` + c.Value + ` </p>
 		<p> Message: ` + message + ` </p>
 		<form action="/submit" method="post">
-			<input type="email" name="email" />
+			<input type="email" name="emailThing" />
 			<input type="submit" />
 		</form>
 	</body>
@@ -60,10 +63,29 @@ func foo(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, html)
 }
 
-func getCode(msg string) string {
-	h := hmac.New(sha256.New, []byte("i love thursdays when it rains 8723 inches"))
-	h.Write([]byte(msg))
-	return fmt.Sprintf("%x", h.Sum(nil))
+type myClaims struct {
+	jwt.StandardClaims
+	Email string
+}
+
+const myKey = "i love thursdays when it rains 8723 inches"
+
+func getJWT(msg string) (string, error) {
+
+	claims := myClaims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Minute * 5).Unix(),
+		},
+		Email: msg,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &claims)
+	ss, err := token.SignedString([]byte(myKey))
+	if err != nil {
+		return "", fmt.Errorf("Coudnt SignedString in %w", err)
+	}
+
+	return ss, nil
 
 }
 
@@ -73,17 +95,22 @@ func bar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email := r.FormValue("email")
+	email := r.FormValue("emailThing")
 	if email == "" {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
-	code := getCode(email)
+	ss, err := getJWT(email)
+	if err != nil {
+		http.Error(w, "couldnt getJWT", http.StatusInternalServerError)
+		return
+
+	}
 
 	c := http.Cookie{
 		Name:  "session",
-		Value: code + "|" + email,
+		Value: ss,
 	}
 
 	http.SetCookie(w, &c)
