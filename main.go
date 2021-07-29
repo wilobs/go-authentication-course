@@ -26,7 +26,7 @@ func index(w http.ResponseWriter, r *http.Request) {
 		<title>Document</title>
 	</head>
 	<body>
-		<h1>%s</h1>
+		<h1>%s At all</h1>
 		<form action="/register" method="post">
 			<input type="email" name="e">
 			<input type="password" name="p">
